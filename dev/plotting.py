@@ -33,8 +33,7 @@ fig.update_layout(
 )
 
 fig.show()
-
-
+# %%
 
 import pickle
 with open('/Users/michaelweinold/github/panel_ecopylot/app/df.pkl', 'rb') as file:

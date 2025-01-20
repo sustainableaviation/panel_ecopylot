@@ -65,6 +65,15 @@ with open('/Users/michaelweinold/github/panel_ecopylot/app/df.pkl', 'rb') as fil
 df = df.pint.dequantify()
 df.columns = df.columns.droplevel(level=1)
 
+dict_fuel_consumption = {
+    'taxi': 3,
+    'takeoff': 7,
+    'climb': 10,
+    'cruise': 65,
+    'descent': 7,
+    'approach': 2,
+}
+
 # FUNCTIONS ##################################################################
 
 
@@ -169,7 +178,45 @@ def generate_plotly_flight_profile(
     return fig
 
 
+def generate_plotly_piechart_fuel(
+    dict_fuel_consumption: dict[str, float]
+) -> plotly.graph_objs._figure.Figure:
+    """_summary_
+
+    _extended_summary_
+
+    See Also
+    --------
+    - [plotly.express.pie](https://plotly.com/python-api-reference/generated/plotly.express.pie)
+
+    Parameters
+    ----------
+    dict_fuel_consumption : dict[str, float]
+        _description_
+
+    Returns
+    -------
+    plotly.graph_objs._figure.Figure
+        _description_
+    """
+    
+    fig = px.pie(
+        values=list(dict_fuel_consumption.values()),
+        names=list(dict_fuel_consumption.keys()),
+        width=1000,
+        height=400,
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=3, b=3),
+        font=dict(size=14),
+    )
+    return fig
+
+
 def calculate_fuel_consumption(event):
+    if widget_autocomplete_airport_origin.value == '' or widget_autocomplete_airport_destination.value == '':
+        pn.state.notifications.error('Please select a departure and destination airport first!', duration=5000)
+        return
     app.airport_origin = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_origin.value].iloc[0]
     app.airport_destination = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_destination.value].iloc[0]
     if widget_autocomplete_airport_alternate.value == '':
@@ -182,6 +229,7 @@ def calculate_fuel_consumption(event):
         lon=(app.airport_origin['lon'], app.airport_destination['lon'])
     )
     panel_plotly_flight_profile.object = generate_plotly_flight_profile(df)
+    panel_plotly_piechart_fuel.object = generate_plotly_piechart_fuel(dict_fuel_consumption)
 
 
 # COLUMN 1 ##################################################################
@@ -233,11 +281,24 @@ widget_button_calculate.on_click(calculate_fuel_consumption)
 
 panel_plotly_worldmap = pn.pane.Placeholder(sizing_mode='stretch_width')
 panel_plotly_flight_profile = pn.pane.Placeholder(sizing_mode='stretch_width')
-panel_plotly_piechart_fuel = pn.pane.Placeholder(sizing_mode='stretch_width')
+panel_plotly_piechart_fuel = pn.pane.Placeholder(sizing_mode='stretch_both')
+
+row_indicator_route_and_fuel = pn.Row(
+    pn.indicators.Number(
+        name='Distance [km]',
+        value=7002,
+    ),
+    pn.indicators.Number(
+        name='Fuel Consumption [t]',
+        value=6000,
+    ),
+    sizing_mode='stretch_width'
+)
 
 # ALL COLUMNS ###############################################################
 
 col1 = pn.Column(
+    '# Flight Settings',
     widget_autocomplete_airport_origin,
     widget_autocomplete_airport_destination,
     widget_autocomplete_airport_alternate,
@@ -245,7 +306,9 @@ col1 = pn.Column(
     widget_button_calculate
 )
 col2 = pn.Column(
+    '# Flight Parameters',
     panel_plotly_worldmap,
+    row_indicator_route_and_fuel,
     panel_plotly_flight_profile,
     panel_plotly_piechart_fuel
 )
@@ -274,7 +337,7 @@ template = pn.template.MaterialTemplate(
     header=header,
     title='EcoPyLot Demonstrator',
     header_background='#001485', # green
-    logo='https://raw.githubusercontent.com/brightway-lca/brightway-webapp/main/app/_media/logo_brightway_white.svg',
+    logo='/Users/michaelweinold/github/panel_ecopylot/media/icon.svg',
     favicon='https://raw.githubusercontent.com/brightway-lca/brightway-webapp/main/app/_media/favicon.png',
 )
 
