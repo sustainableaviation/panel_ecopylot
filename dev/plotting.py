@@ -2,15 +2,10 @@
 import plotly
 import plotly.express as px
 
-from urllib.request import urlopen
-import json
-with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
-    counties = json.load(response)
-
 # https://plotly.com/python-api-reference/generated/plotly.express.line_geo.html
 fig = px.line_geo(
-    lat=(12.0,20),
-    lon=(12.0,20),
+    lat = [40.7127, 51.5072],
+    lon = [-74.0059, 0.1275],
     projection="natural earth",
     basemap_visible=True,
     width=500,
@@ -26,6 +21,8 @@ fig.update_geos(
     showland=True, landcolor="white",
     showocean=True, oceancolor="LightBlue",
 )
+# https://stackoverflow.com/a/69075593
+fig.update_traces(line_color='#0000ff', line_width=5)
 # https://community.plotly.com/t/excessive-margins-in-graphs-how-to-remove/
 fig.update_layout(
     margin=dict(l=0, r=0, t=3, b=3),
