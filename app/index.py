@@ -13,6 +13,7 @@ import numpy as np
 
 import pint
 import pint_pandas
+import pickle
 ureg = pint.get_application_registry()
 
 # MAIN APPLICATION CLASS ####################################################
@@ -59,6 +60,11 @@ df_aircraft_database = df_aircraft_database.pint.quantify(level=1)
 df_aircraft_database['combined_name'] = df_aircraft_database['Manufacturer'] + ' ' + df_aircraft_database['Aircraft Designation'] + ' (' + df_aircraft_database['Engine Designation'] + ')'
 app.df_aircraft_database = df_aircraft_database
 
+with open('/Users/michaelweinold/github/panel_ecopylot/app/df.pkl', 'rb') as file:
+    df = pickle.load(file)
+df = df.pint.dequantify()
+df.columns = df.columns.droplevel(level=1)
+
 # FUNCTIONS ##################################################################
 
 
@@ -87,26 +93,95 @@ def generate_plotly_worldmap(
         _description_
     """
     
+    # https://plotly.com/python-api-reference/generated/plotly.express.line_geo.html
     fig = px.line_geo(
-        lat=(lat[0], lat[1]),
-        lon=(lon[0], lon[1]),
-        projection="robinson",
+        lat=lat,
+        lon=lon,
+        projection="natural earth",
+        basemap_visible=True,
+        fitbounds="locations",
+        width=1000,
+        height=300,
         #hover_name=airport_description,
         #text=airport_codes,
         #hover_data=[None, None],
     )
+    # https://plotly.com/python/map-configuration/
+    fig.update_geos(
+        resolution=110,
+        showcountries=True, countrycolor="Black",
+        showland=True, landcolor="white",
+        showocean=True, oceancolor="LightBlue",
+    )
+    # https://stackoverflow.com/a/69075593
+    fig.update_traces(line_color='#0000ff', line_width=5)
+    # https://community.plotly.com/t/excessive-margins-in-graphs-how-to-remove/
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=3, b=3),
+    )
+    return fig
+
+
+def generate_plotly_flight_profile(
+    df: pd.DataFrame
+) -> plotly.graph_objs._figure.Figure:
+    """_summary_
+
+    _extended_summary_
+
+    See Also
+    --------
+    - [plotly.express.line](https://plotly.com/python-api-reference/generated/plotly.express.line.html#plotly.express.line)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        _description_
+
+    Returns
+    -------
+    plotly.graph_objs._figure.Figure
+        _description_
+    """
+    
+    fig = px.line(
+        df,
+        x="Distance",
+        y="Altitude",
+        width=1000,
+        height=200,
+        labels={"Distance": "Distance [NM]", "Altitude": "Altitude [ft]"}
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=3, b=3),
+    )
+    """
+    fig.add_shape(
+        type="rect",
+        xref="paper", yref="paper",
+        x0=-0.04, y0=-0.3, x1=1.04, y1=1.1, 
+        line=dict(
+            color="black",
+            width=1,
+            ),
+    )
+    """
     return fig
 
 
 def calculate_fuel_consumption(event):
     app.airport_origin = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_origin.value].iloc[0]
     app.airport_destination = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_destination.value].iloc[0]
-    app.airport_alternate = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_alternate.value].iloc[0]
+    if widget_autocomplete_airport_alternate.value == '':
+        app.airport_alternate = None
+    else:
+        app.airport_alternate = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_alternate.value].iloc[0]
     
     panel_plotly_worldmap.object = generate_plotly_worldmap(
         lat=(app.airport_origin['lat'], app.airport_destination['lat']),
         lon=(app.airport_origin['lon'], app.airport_destination['lon'])
     )
+    panel_plotly_flight_profile.object = generate_plotly_flight_profile(df)
 
 
 # COLUMN 1 ##################################################################
@@ -156,8 +231,9 @@ widget_button_calculate.on_click(calculate_fuel_consumption)
 
 # COLUMN 2 ##################################################################
 
-panel_plotly_worldmap = pn.pane.Placeholder()
-panel_plotly_piechart_fuel = pn.pane.Placeholder()
+panel_plotly_worldmap = pn.pane.Placeholder(sizing_mode='stretch_width')
+panel_plotly_flight_profile = pn.pane.Placeholder(sizing_mode='stretch_width')
+panel_plotly_piechart_fuel = pn.pane.Placeholder(sizing_mode='stretch_width')
 
 # ALL COLUMNS ###############################################################
 
@@ -170,6 +246,7 @@ col1 = pn.Column(
 )
 col2 = pn.Column(
     panel_plotly_worldmap,
+    panel_plotly_flight_profile,
     panel_plotly_piechart_fuel
 )
 
