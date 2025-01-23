@@ -16,6 +16,17 @@ import pint_pandas
 import pickle
 ureg = pint.get_application_registry()
 
+import sys
+import os
+module_path = os.path.abspath("/Users/michaelweinold/github/EcoPyLot")
+if module_path not in sys.path:
+    sys.path.append(module_path)
+
+from ecopylot.route import compute_flight_profile
+from ecopylot.geospatial import haversine_distance
+from ecopylot.utilities import remove_pint_units_from_df
+
+
 # MAIN APPLICATION CLASS ####################################################
 
 class panel_app_class:
@@ -26,6 +37,8 @@ class panel_app_class:
         self.selected_airport_origin = None
         self.selected_airport_destination = None
         self.selected_airport_alternate = None
+        self.route_distance = None
+        self.df_flight_profile = None
 
 app = panel_app_class()
 
@@ -77,9 +90,10 @@ dict_fuel_consumption = {
 # FUNCTIONS ##################################################################
 
 
-def generate_plotly_worldmap(
-    lat: tuple[float, float],
-    lon: tuple[float, float]
+def generate_plotly_map_origin_destination(
+    coordinates_origin: tuple[float, float],
+    coordinates_destination: tuple[float, float],
+    coordinates_alternate: tuple[float, float],
 ) -> plotly.graph_objs._figure.Figure:
     """_summary_
 
@@ -101,33 +115,64 @@ def generate_plotly_worldmap(
     plotly.graph_objs._figure.Figure
         _description_
     """
+
+    dict_map_settings = {
+        "resolution": 110,
+        "projection": "natural earth",
+        "fitbounds": "locations",
+        "width":1000,
+        "height":300,
+    }
     
     # https://plotly.com/python-api-reference/generated/plotly.express.line_geo.html
     fig = px.line_geo(
-        lat=lat,
-        lon=lon,
-        projection="natural earth",
+        lat=[coordinates_origin[0], coordinates_destination[0]],
+        lon=[coordinates_origin[1], coordinates_destination[1]],
+        projection=dict_map_settings["projection"],
+        fitbounds=dict_map_settings["fitbounds"],
+        width=dict_map_settings["width"],
+        height=dict_map_settings["height"],
         basemap_visible=True,
-        fitbounds="locations",
-        width=1000,
-        height=300,
         #hover_name=airport_description,
         #text=airport_codes,
         #hover_data=[None, None],
     )
     # https://plotly.com/python/map-configuration/
     fig.update_geos(
-        resolution=110,
+        resolution=50,
         showcountries=True, countrycolor="Black",
         showland=True, landcolor="white",
         showocean=True, oceancolor="LightBlue",
     )
     # https://stackoverflow.com/a/69075593
-    fig.update_traces(line_color='#0000ff', line_width=5)
+    fig.update_traces(line_color='red', line_width=5)
     # https://community.plotly.com/t/excessive-margins-in-graphs-how-to-remove/
     fig.update_layout(
-        margin=dict(l=0, r=0, t=3, b=3),
+        margin=dict(l=0, r=0, t=0, b=3),
     )
+
+    if coordinates_alternate is not None:
+        alternate_figure = px.line_geo(
+            lat=[coordinates_destination[0], coordinates_alternate[0]],
+            lon=[coordinates_destination[1], coordinates_alternate[1]],
+            width=dict_map_settings["width"],
+            height=dict_map_settings["height"],
+        )
+        alternate_figure.data[0].name='alternate'
+        fig.add_trace(
+            alternate_figure.data[0]
+        )
+        fig.update_traces(
+            patch={
+                "line": {
+                    "color": "#fc9403",
+                    "width": 5,
+                    "dash": 'dot',
+                }
+            },
+            selector = ({'name':'alternate'})
+        )
+
     return fig
 
 
@@ -224,11 +269,26 @@ def calculate_fuel_consumption(event):
     else:
         app.airport_alternate = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_alternate.value].iloc[0]
     
-    panel_plotly_worldmap.object = generate_plotly_worldmap(
-        lat=(app.airport_origin['lat'], app.airport_destination['lat']),
-        lon=(app.airport_origin['lon'], app.airport_destination['lon'])
+    panel_plotly_worldmap.object = generate_plotly_map_origin_destination(
+        coordinates_origin=(app.airport_origin['lat'], app.airport_origin['lon']),
+        coordinates_destination=(app.airport_destination['lat'], app.airport_destination['lon']),
+        coordinates_alternate=(app.airport_alternate['lat'], app.airport_alternate['lon']) if app.airport_alternate is not None else None
     )
-    panel_plotly_flight_profile.object = generate_plotly_flight_profile(df)
+    app.route_distance = haversine_distance(
+        A_lat=app.airport_origin['lat'],
+        A_lon=app.airport_origin['lon'],
+        B_lat=app.airport_destination['lat'],
+        B_lon=app.airport_destination['lon']
+    ).to('km')
+    panel_indicator_route_distance.value = app.route_distance.magnitude
+    _, _, _, app.df_flight_profile = compute_flight_profile(
+        df_aircraft=app.df_aircraft_database,
+        aircraft_designation='A220-300',
+        altitude_cruise=32000*ureg.ft,
+        distance_route=app.route_distance,
+    )
+    app.df_flight_profile = remove_pint_units_from_df(app.df_flight_profile)
+    panel_plotly_flight_profile.object = generate_plotly_flight_profile(app.df_flight_profile)
     panel_plotly_piechart_fuel.object = generate_plotly_piechart_fuel(dict_fuel_consumption)
 
 
@@ -283,15 +343,19 @@ panel_plotly_worldmap = pn.pane.Placeholder(sizing_mode='stretch_width')
 panel_plotly_flight_profile = pn.pane.Placeholder(sizing_mode='stretch_width')
 panel_plotly_piechart_fuel = pn.pane.Placeholder(sizing_mode='stretch_both')
 
+panel_indicator_route_distance = pn.indicators.Number(
+    name='Distance [km]',
+    value=0,
+    format='{value:,.0f}',
+)
+panel_indicator_fuel_amount = pn.indicators.Number(
+    name='Fuel Consumption [t]',
+    value=0,
+)
+
 row_indicator_route_and_fuel = pn.Row(
-    pn.indicators.Number(
-        name='Distance [km]',
-        value=7002,
-    ),
-    pn.indicators.Number(
-        name='Fuel Consumption [t]',
-        value=6000,
-    ),
+    panel_indicator_route_distance,
+    panel_indicator_fuel_amount,
     sizing_mode='stretch_width'
 )
 

@@ -9,6 +9,7 @@ lon = [-74.0059, 0.1275]
 fig = px.line_geo(
     lat=lat,
     lon=lon,
+    line_dash=['dash', 'dash'],
     projection="natural earth",
     basemap_visible=True,
     fitbounds="locations",
@@ -26,13 +27,43 @@ fig.update_geos(
     showocean=True, oceancolor="LightBlue",
 )
 # https://stackoverflow.com/a/69075593
-fig.update_traces(line_color='#0000ff', line_width=5)
+fig.update_traces(line_color='#fc0303', line_width=5)
 # https://community.plotly.com/t/excessive-margins-in-graphs-how-to-remove/
 fig.update_layout(
     margin=dict(l=0, r=0, t=3, b=3),
 )
 
+alternate_figure =px.line_geo(
+    lat=[45.7127, 55.5072],
+    lon=[-70.0059, 5.1275],
+    projection="natural earth",
+    basemap_visible=True,
+    fitbounds="locations",
+    width=500,
+    height=200,
+    #hover_name=airport_description,
+    #text=airport_codes,
+    #hover_data=[None, None],
+)
+alternate_figure.data[0].name='alternate'
+
+fig.add_trace(
+    alternate_figure.data[0]
+)
+fig.update_traces(
+    patch={
+        "line": {
+            "color": "#fc9403",
+            "width": 4,
+            "dash": 'dot',
+        }
+    },
+    selector = ({'name':'alternate'})
+)
+
 fig.show()
+# %%
+
 # %%
 
 import pickle
@@ -63,3 +94,4 @@ fig.add_shape(type="rect",
     #fillcolor="LightSkyBlue",
 )
 fig.show()
+# %%
