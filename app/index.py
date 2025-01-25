@@ -167,7 +167,7 @@ def generate_plotly_map_origin_destination(
                 "line": {
                     "color": "#fc9403",
                     "width": 5,
-                    "dash": 'dot',
+                    #"dash": 'dot',
                 }
             },
             selector = ({'name':'alternate'})
@@ -269,6 +269,7 @@ def calculate_fuel_consumption(event):
     else:
         app.airport_alternate = app.df_airports.loc[app.df_airports['combined_name'] == widget_autocomplete_airport_alternate.value].iloc[0]
     
+    app.series_selected_aircraft = app.df_aircraft_database.loc[app.df_aircraft_database['combined_name'] == widget_autocomplete_selected_aircraft.value].iloc[0]
     panel_plotly_worldmap.object = generate_plotly_map_origin_destination(
         coordinates_origin=(app.airport_origin['lat'], app.airport_origin['lon']),
         coordinates_destination=(app.airport_destination['lat'], app.airport_destination['lon']),
@@ -290,6 +291,8 @@ def calculate_fuel_consumption(event):
     app.df_flight_profile = remove_pint_units_from_df(app.df_flight_profile)
     panel_plotly_flight_profile.object = generate_plotly_flight_profile(app.df_flight_profile)
     panel_plotly_piechart_fuel.object = generate_plotly_piechart_fuel(dict_fuel_consumption)
+
+    widget_floatinput_altitude_cruise.value = app.series_selected_aircraft['Ceiling Cruise'].magnitude
 
 
 # COLUMN 1 ##################################################################
@@ -330,12 +333,52 @@ widget_autocomplete_selected_aircraft = pn.widgets.AutocompleteInput(
 
 
 widget_button_calculate = pn.widgets.Button( 
-    name='Calculate',
-    icon='database-plus',
+    name='Set Route',
+    icon='route-square', # https://tabler.io/icons
     button_type='primary',
     sizing_mode='stretch_width'
 )
 widget_button_calculate.on_click(calculate_fuel_consumption)
+
+widget_floatinput_altitude_cruise = pn.widgets.FloatInput(
+    name='Cruise Altitude [ft]',
+    value=None,
+    sizing_mode='stretch_width',
+    disabled=True,
+    placeholder='Please select aircraft first.'
+)
+widget_floatinput_cruise_speed = pn.widgets.FloatInput(
+    name='Cruise Speed [kts]',
+    value=None,
+    sizing_mode='stretch_width',
+    disabled=True,
+    placeholder='Please select aircraft first.'
+)
+widget_floatinput_payload = pn.widgets.FloatInput(
+    name='Payload [kg]',
+    value=None,
+    sizing_mode='stretch_width',
+    placeholder='Please select aircraft first.'
+)
+widget_floatinput_pax = pn.widgets.FloatInput(
+    name='Passengers',
+    value=None,
+    sizing_mode='stretch_width',
+    placeholder='Please select aircraft first.'
+)
+
+widget_select_fuel_type = pn.widgets.Select(
+    name='Fuel Type',
+    options=['Fossil', 'Synth-Fuel', 'Bio-Fuel'],
+    value='Fossil',
+    sizing_mode='stretch_width'
+)
+widget_select_fuel_location = pn.widgets.Select(
+    name='Production Location',
+    options=['Europe', 'USA', 'China', 'India', 'Brazil', 'Russia', 'Middle East', 'Other'],
+    value='USA',
+    sizing_mode='stretch_width'
+)
 
 # COLUMN 2 ##################################################################
 
@@ -362,12 +405,27 @@ row_indicator_route_and_fuel = pn.Row(
 # ALL COLUMNS ###############################################################
 
 col1 = pn.Column(
-    '# Flight Settings',
+    '# Route Parameters',
     widget_autocomplete_airport_origin,
     widget_autocomplete_airport_destination,
     widget_autocomplete_airport_alternate,
+    widget_button_calculate,
+    '# Aircraft Parameters',
     widget_autocomplete_selected_aircraft,
-    widget_button_calculate
+    pn.Row(
+        widget_floatinput_altitude_cruise,
+        widget_floatinput_cruise_speed,
+    ),
+    pn.Row(
+        widget_floatinput_payload,
+        widget_floatinput_pax,
+    ),
+    '# Fuel Parameters',
+    pn.Row(
+        widget_select_fuel_type,
+        widget_select_fuel_location
+    ),
+
 )
 col2 = pn.Column(
     '# Flight Parameters',
